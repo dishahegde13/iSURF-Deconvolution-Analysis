@@ -1,4 +1,4 @@
-<img width="3990" height="81" alt="image" src="https://github.com/user-attachments/assets/78038f35-000b-4372-8631-ded7aabf5ee9" /># Epigenetic Cell Deconvolution to Study Prostate Cancer Across Age Groups
+# Epigenetic Cell Deconvolution to Study Prostate Cancer Across Age Groups
 Disha Hegde, Sayan Bakshi, Jeffrey R. Hage, Brock C. Christensen
 
 iSURF NH-INBRE 2025, University of New Hampshire, Dartmouth Cancer Center, Geisel School of Medicine at Dartmouth
