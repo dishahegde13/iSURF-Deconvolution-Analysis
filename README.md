@@ -1,4 +1,4 @@
-# Epigenetic Cell Deconvolution to Study Prostate Cancer Across Age Groups
+<img width="3990" height="81" alt="image" src="https://github.com/user-attachments/assets/78038f35-000b-4372-8631-ded7aabf5ee9" /># Epigenetic Cell Deconvolution to Study Prostate Cancer Across Age Groups
 Disha Hegde, Sayan Bakshi, Jeffrey R. Hage, Brock C. Christensen
 
 iSURF NH-INBRE 2025, University of New Hampshire, Dartmouth Cancer Center, Geisel School of Medicine at Dartmouth
@@ -54,7 +54,7 @@ iSURF NH-INBRE 2025, University of New Hampshire, Dartmouth Cancer Center, Geise
  * Extracted normalized β-values (range: 0 to 1)
 
 #### 5. Visualization
- * Cleaned data was visualized to check for mislabeled/contiminated samples using PCA, heatmaps, and SNP correlation plots
+ * Cleaned data was visualized to check for mislabeled/contaminated samples using PCA, heatmaps, and SNP correlation plots
 
 ### Cell Deconvolution
 #### 1. Beta value separation
@@ -66,7 +66,18 @@ iSURF NH-INBRE 2025, University of New Hampshire, Dartmouth Cancer Center, Geise
 
 #### 3. Visualization
  * Converted `HiTIMED` results to long format
- * Created box plots, jitter plots, linear models and stacked bar plots comparing cell type proportions and age (as both a continous variable and age tertiles)
+ * Created box plots, jitter plots, linear models, and stacked bar plots comparing cell type proportions and age (as both a continuous variable and age tertiles)
+
+## Acknowledgments
+
+This project was conducted during my NH-INBRE iSURF internship under Dr. Brock Christensen at Dartmouth Cancer Center.  
+
+Thank you to Dr. Brock Christensen and members of the Christensen Lab and Salas Lab at Dartmouth Cancer Center for their mentorship and guidance. I am also grateful to Erin Plummer, Jennifer Therriault, and Dr. Patricia A. Pioli guidance during the program.
+
+FUNDING: Research supported by New Hampshire- INBRE through an Institutional Development Award (IDeA), P20GM103506, from the National Institute of General Medical Sciences of the NIH.
+
+Data was accessed via GEO and analyzed using open-source tools in R.
+
 
 ### References
 [^1]: Zhou, C. D., Pettersson, A., Plym, A., Svitlana Tyekucheva, Penney, K. L., Sesso, H. D., Kantoff, P. W., Mucci, L. A., & Stopsack, K. H. (2022). Differences in Prostate Cancer Transcriptomes by Age at Diagnosis: Are Primary Tumors from Older Men Inherently Different? Cancer Prevention Research, 15(12), 815–825. https://doi.org/10.1158/1940-6207.capr-22-0212
