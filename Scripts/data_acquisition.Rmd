@@ -1,0 +1,62 @@
+---
+title: "Data Acquisition"
+author: "Disha Hegde"
+date: "2025-08-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# ==============================================================================
+# Libraries
+# ==============================================================================
+#Run each time you start. Install any libraries you don't have using "install.packages()".
+## Data Acquisition
+library(GEOquery)
+
+```
+
+```{r}
+# ==============================================================================
+# Data Acquisition 
+# ==============================================================================
+
+# Download phenotypic data
+gse <- getGEO("GSE183015", GSEMatrix = TRUE)
+gse <- gse[[1]]
+pheno_data <- pData(gse)
+head(pheno_data)
+write.csv(pheno_data, "./phenodata.csv", row.names = TRUE)
+
+# Download raw data (IDAT files) GSE183015: only DNA methylation data 
+getGEOSuppFiles("GSE183015")
+
+# Unzip EPIC hg38 annotation file then add it here. Download the required Annotation and Mask file depending on your data. Links to the files present in ReadMe of the github.
+Annotfile <- read.delim("EPIC.hg38.manifest.tsv")
+Maskfile <- read.delim("EPIC.hg38.mask.tsv")
+
+# Location of idat files, GSE183015: only DNA methylation data.
+idat <- "replace_with_your_idat_path"
+
+# Read in methylation .idat files and covariate data using minfi package
+targets <- read.csv("replace_with_your_path_to_pheno_data") # Requires sample sheet, which i made using pheno_data.
+targets$Basename <- file.path(idat, paste(targets$ID, targets$Sentrix_ID, targets$Sentrix_Position, sep = "_"))
+RGset <- read.metharray.exp(targets = targets, extended = TRUE) #RedGreen channel set
+
+ID <- pData(RGset)$ID
+Age <- pData(RGset)$age
+Sentrix_ID <- pData(RGset)$Sentrix_ID
+
+# Load covariate data
+covariates <- read.csv("C:/Users/disha/OneDrive - USNH/Desktop/iSURF_Summer2025/phenodata_v02.csv", header= TRUE)
+
+# Recast relevant variable as factors
+covariates$Beadchip <- as.factor(covariates$Sentrix_ID)
+covariates$CompleteBarcode <- paste0(covariates$ID, "_",covariates$Sentrix_ID, "_", covariates$Sentrix_Position)
+covariates$CompleteBarcode <- as.factor(covariates$CompleteBarcode)
+
+```
+

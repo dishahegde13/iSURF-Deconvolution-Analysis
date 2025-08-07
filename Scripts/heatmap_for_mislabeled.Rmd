@@ -1,0 +1,159 @@
+---
+title: "Heatmaps for mislabeled sample"
+author: "Disha Hegde"
+date: "2025-08-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# ==============================================================================
+# Libraries
+# ==============================================================================
+#Run each time you start. Install any libraries you don't have using "install.packages()".
+## Heatmap
+library(pheatmap)
+library(RColorBrewer)
+library(matrixStats)
+require(grid)
+fixInNamespace("draw_colnames", "pheatmap") #vjust = 1, hjust = 0.5, rot = 0
+
+```
+
+```{r}
+# ==============================================================================
+# Heatmap of top 10000 most variable CpG sites
+# ==============================================================================
+# Make betas column names and covariates row names match
+betas2 <- betas
+covariates2 <- covariates
+colnames(betas2) <- covariates$ID
+rownames(covariates2) <- covariates$ID
+
+# Make the annotation dataframe for the heatmap
+heat_annot <- data.frame(
+  row.names= covariates2$ID,
+  tissue_type = covariates2$tissue_type,
+  cancer_status = covariates2$cancer_status)
+
+# Define colors for annotation colorbars
+ann_colors <- list(tissue_type = c('buffy coat'= "grey", 
+                             'prostate tissue'= "black"), 
+                   cancer_status = c('normal'= "grey", 
+                                'cancer'= "black"))
+# Identify most variable CpGs
+# Ensure beta values and covariate data are in the same order
+all(colnames(betas2) == row.names(covariates2))
+
+# Calculate variable of each CpG across all samples(all subjects, all tissue types)
+CpG_Var <- matrixStats::rowVars(betas2)
+rankVar <- data.frame('order' = rank(-CpG_Var), 'var'= CpG_Var)
+rankVar$top1000 <- ifelse(rankVar$order <= 10000, 'Yes', 'No')
+
+# Get rank of CpGs by
+rankvar= rank(-CpG_Var)
+
+# top 10,000 cpgs
+data.topvar <- betas2[rankVar$top1000 == 'Yes',]
+data.topvar <- as.matrix(data.topvar)
+
+```
+
+```{r}
+# Ensure beta values and covariate data are in the same order
+all(colnames(betas2) == row.names(covariates2))
+
+# Ensure sample ID column is character
+covariates2$ID <- as.character(covariates2$ID)
+
+# Create logical vectors for each group
+buffy_ids <- covariates2$ID[covariates2$tissue_type == "buffy coat" & covariates2$cancer_status == "normal"]
+normal_prostate_ids <- covariates2$ID[covariates2$tissue_type == "prostate tissue" & covariates2$cancer_status == "normal"]
+cancer_prostate_ids <- covariates2$ID[covariates2$tissue_type == "prostate tissue" & covariates2$cancer_status == "cancer"]
+
+# Subset betas2 by column into the three tissue types
+betas_buffy <- betas2[, colnames(betas2) %in% buffy_ids]
+betas_normal_prostate <- betas2[, colnames(betas2) %in% normal_prostate_ids]
+betas_cancer_prostate <- betas2[, colnames(betas2) %in% cancer_prostate_ids]
+
+# Identify most variable CpGs
+get_top_variable_cpgs <- function(beta_matrix, top_n = 10000) {
+  var_cpg <- rowVars(beta_matrix)
+  top_cpgs <- order(var_cpg, decreasing = TRUE)[1:top_n]
+  return(beta_matrix[top_cpgs, ])}
+
+```
+
+```{r}
+#Heatmap of all sample types together
+
+## Make diectory for heatmaps
+dir.create("./Heatmap")
+
+find_coordinates = function(n, gaps, m = 1:n){
+    if(length(gaps) == 0){
+        return(list(coord = unit(m / n, "npc"), size = unit(1 / n, "npc") ))
+    }
+    
+    if(max(gaps) > n){
+        stop("Gaps do not match with matrix size")
+    }
+    
+    size = (1 / n) * (unit(1, "npc") - length(gaps) * unit("4", "bigpts"))
+    
+    gaps2 = apply(sapply(gaps, function(gap, x){x > gap}, m), 1, sum) 
+    coord = m * size + (gaps2 * unit("4", "bigpts"))
+    
+    return(list(coord = coord, size = size))
+}
+#Plot using pHeatmap
+png('Heatmap/all_sample_top10000.png',width = 14, height = 14, units = 'in', res = 600)
+pheatmap(
+  data.topvar,
+  annotation_names_col= T,
+  show_rownames= FALSE, #CpGs
+  show_colnames= TRUE, #Samples
+  cluster_cols= T,
+  color= colorRampPalette(c("#67a9cf","#3690c0","#02818a","#016c59","#014636"))(1024),
+  clustering_distance_rows= "manhattan",
+  clustering_distance_cols= "manhattan",
+  clustering_method= "average",
+  annotation_col= heat_annot,
+  annotation_colors= ann_colors,
+  fontsize_col = 7,
+  border_color= NA,
+  main = "Heatmap of top 10000 variable CpG sites", 
+  fontsize= 24
+)
+dev.off()
+
+```
+
+```{r}
+# ==============================================================================
+# SNP Correlation Heatmap 
+# ==============================================================================
+# Get beta values only from the SNP control probes - remember to remove bad samples
+snpBeta <- getSnpBeta(RGset)
+
+# Pairwise correlation of SNP profiles
+snp_cor <- cor(snpBeta, method = "pearson")
+
+rownames(snp_cor) <- sub("_.*", "", rownames(snp_cor))
+colnames(snp_cor) <- sub("_.*", "", colnames(snp_cor))
+
+# Heatmap of SNP correlations
+png('Heatmap/SNP_correlations.png',width = 14, height = 14, units = 'in', res = 600)
+pheatmap::pheatmap(snp_cor,
+                   cluster_rows = TRUE,
+                   cluster_cols = TRUE,
+                   fontsize_col = 7,
+                   fontsize_row = 7,
+                   fontsize = 18)
+dev.off()
+
+```
+

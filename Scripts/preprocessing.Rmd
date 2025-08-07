@@ -1,0 +1,160 @@
+---
+title: "Preprocessing"
+author: "Disha Hegde"
+date: "2025-08-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# ==============================================================================
+# Libararies
+# ==============================================================================
+#Run each time you start. Install any libraries you don't have using "install.packages()".
+## Preprocessing
+library(minfi)
+library(ENmix)
+library(FlowSorted.Blood.EPIC)
+library(ggplot2)
+library(ggpubr)
+library(IlluminaHumanMethylationEPICmanifest)
+library(ggrepel)
+library(plotly)
+```
+
+```{r}
+# ==============================================================================
+# Quality COntrol - Samples and CpGs
+# ==============================================================================
+# Make directory for QC
+dir.create("./quality_control")
+
+# Set working directory for QC plots
+setwd("./quality_control")
+
+# Get QC
+ENmix::plotCtrl(RGset)
+
+# Increase sample threshold to 10%
+qcinfo <- ENmix::QCinfo(RGset, samplethre= 0.1)
+
+# Display lower quality samples
+covariates[covariates$CompleteBarcode %in% qcinfo$badsample,c('ID', 'Beadchip', 'Sentrix_Position', 'age', 'sex')]
+
+```
+
+```{r}
+# ==============================================================================
+# Normalize Beta Values
+# ==============================================================================
+
+# Run functional normalization
+funnormEPIC <- preprocessFunnorm(RGset)
+
+# Filter probes below the specified detection p-value
+funnormEPIC <- funnormEPIC[!row.names(funnormEPIC) %in% qcinfo$badCpG,]
+
+# Indicate number of probes removed - 35,157 CpGs removed
+paste(formatC(length(qcinfo$badCpG), big.mark= ','), 'CpGs removed due to low detection p value')
+
+# Filtering Bad samples - 2
+funnormEPIC <- funnormEPIC[, !colnames(funnormEPIC) %in% qcinfo$badsample]
+
+# 730, 731, and 732 from same patient : 2/3 bad samples, so remove all 3
+funnormEPIC <- funnormEPIC[, !colnames(funnormEPIC) %in% c("GSM5548730_204920840083_R08C01", "GSM5548731_204920840127_R07C01","GSM5548732_204920840127_R08C01")]
+
+#Remember to remove these from covariate data as well!
+
+```
+
+```{r}
+# ==============================================================================
+# Filter Probes
+# ==============================================================================
+
+# Filter probes on Y chromosome
+cpgRemove <- Annotfile$Probe_ID[Annotfile$CpG_chrm == "chrY"]
+cpgRemove <- cpgRemove[cpgRemove %in% row.names(funnormEPIC)]
+funnormEPIC <- funnormEPIC[!row.names(funnormEPIC) %in% cpgRemove]
+
+# Indicate number of probes removed - 544
+paste(formatC(length(cpgRemove), big.mark= ','), 'loci on Y chromosome removed')
+
+# Filter probes on X chromosome
+cpgRemove <- Annotfile$Probe_ID[Annotfile$CpG_chrm == "chrX"]
+cpgRemove <- cpgRemove[cpgRemove %in% row.names(funnormEPIC)]
+funnormEPIC <- funnormEPIC[!row.names(funnormEPIC) %in% cpgRemove]
+
+# Indicate number of probes removed - 19,091
+paste(formatC(length(cpgRemove), big.mark= ','), 'loci on X chromosome removed')
+
+# Filter SNP/cross-hybridizing probes
+cpgRemove <- Maskfile$probeID[Maskfile$MASK_general == T]
+cpgRemove <- cpgRemove[cpgRemove %in% row.names(funnormEPIC)]
+funnormEPIC <- funnormEPIC[!row.names(funnormEPIC) %in% cpgRemove]
+
+# Indicate number of probes removed - 102,763
+paste(formatC(length(cpgRemove), big.mark= ','), 'SNP associated or cross-hybridizing CpGs removed')
+
+# Extract beta-values for full dataset
+betas <- getBeta(funnormEPIC)
+
+```
+
+```{r}
+# ==============================================================================
+# Visualize beta values using PCA plots
+# ==============================================================================
+#Move back to your main project directory
+setwd("..")
+
+# Look at PCA for overall betas
+pca_overall <- princomp(betas)
+
+#Combine 5 PCs
+pca_selected <- pca_overall$loadings[,1:5]
+
+# Change to data frame
+pca_selected <- as.data.frame(pca_selected)
+
+# Make new ID column with just "GSM..."
+pca_selected$ID <- sub("_.*","", rownames(pca_selected))
+
+# Merge covariates and pca_selected
+merged_pca <- merge(pca_selected, covariates, by = "ID")
+
+#Change column 2-6 as PC1,2..5 (Col1 = ID)
+colnames(merged_pca)[2:6] <- paste('PC',seq(2:6),sep = '')
+
+```
+
+```{r}
+#Make a directory for PCA plots
+dir.create("./PCA")
+
+# Plot by tissue type, you can change the covariate to see different types of PCA. 
+png('PCA/tissue_type1_PCA.png',width = 7, height = 7, units = 'in', res = 600)
+ggscatter(data = merged_pca,x = 'PC1',y = 'PC2',color = 'tissue_type')
+dev.off()
+png('PCA/tissue_type2_PCA.png',width = 7, height = 7, units = 'in', res = 600)
+ggscatter(data = merged_pca,x = 'PC2',y = 'PC3',color = 'tissue_type')
+dev.off()
+
+# For interactive PCA plots - you can change the covarite here too
+p <- ggplot(merged_pca, aes(x = PC1, y = PC2, color = tissue_type, text = ID)) +
+  geom_point(size = 2) +
+  theme_minimal() +
+  labs(title = "PCA of Tissue Type",
+       x = "PC1", y = "PC2")
+
+# Make it interactive
+ggplotly(p, tooltip = "text")
+
+# Mislabeled sample was found here initially. Required more visualizations to be able to clearly tell that it was not a biological difference.
+```
+
+
+

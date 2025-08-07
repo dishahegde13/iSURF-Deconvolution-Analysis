@@ -1,0 +1,274 @@
+---
+title: "Cell Deconvolution"
+author: "Disha Hegde"
+date: "2025-08-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# ==============================================================================
+# Libraries
+# ==============================================================================
+#Run each time you start. Install any libraries you don't have using "install.packages()".
+## Cell Deconvolution
+library(sesame)
+library(devtools)
+library(HiTIMED)
+library(dplyr)
+library(tidyr)
+library(tidyverse)
+library(broom)
+library(ggpmisc)
+library(viridis)
+library(ggthemes)
+library(ggpmisc)
+library(ggplot2)
+library(ggpubr)
+library(ggrepel)
+library(plotly)
+```
+
+```{r}
+# ==============================================================================
+# Cell Deconvolution
+# ==============================================================================
+
+# HiTIMED deconvolution - Prostate tumor and matched normal tissue
+# Start with layer 6(highest cell types) then depending on recommendation lower the layer of cell deconvolution if needed
+# I did layer 4 for this data since only 2 samples had NaNs present. Which are then converted to 0s
+
+# Recommended methylation data preprocess order: pOOBAH --> Background subtraction using oob (noob) --> Dye bias correction.
+
+HiTIMED_results_normal_l4 <- HiTIMED_deconvolution(betas_normal_prostate, "PRAD", h = 4, tissue_type = "not tumor")
+
+HiTIMED_results_cancer_l4 <- HiTIMED_deconvolution(betas_cancer_prostate, "PRAD", h = 4, tissue_type = "tumor")
+```
+
+```{r}
+# ==============================================================================
+# Cell Deconvolution Visuals
+# ==============================================================================
+
+# Changed NaN to 0 for 1 sample
+HiTIMED_results_cancer_l4_clean <- HiTIMED_results_cancer_l4
+row <- as.numeric(HiTIMED_results_cancer_l4_clean["GSM5548720", ])
+row[is.nan(row)] <- 0
+HiTIMED_results_cancer_l4_clean["GSM5548720", ] <- row
+
+# Add ID as a column (if rownames are sample IDs)
+HiTIMED_results_normal_l4$ID <- rownames(HiTIMED_results_normal_l4)
+HiTIMED_results_normal_l4$Group <- "Normal"
+
+HiTIMED_results_cancer_l4_clean$ID <- rownames(HiTIMED_results_cancer_l4_clean)
+HiTIMED_results_cancer_l4_clean$Group <- "Tumor"
+
+# Make sure both data frames have the same columns
+common_cols <- intersect(colnames(HiTIMED_results_normal_l4), colnames(HiTIMED_results_cancer_l4_clean))
+combined_l4 <- rbind(
+  HiTIMED_results_normal_l4[, c(common_cols, "ID", "Group")],
+  HiTIMED_results_cancer_l4_clean[, c(common_cols, "ID", "Group")]
+)
+
+# Convert to Long Format
+cellprops_long_l4 <- pivot_longer(combined_l4,
+                               cols = where(is.numeric),
+                               names_to = "CellType",
+                               values_to = "Proportion")
+# Make directory for box plots
+dir.create("./box_plots")
+
+# Box plot!
+png('box_plots/celltype_tvsn.png',width = 7, height = 7, units = 'in', res = 600)
+ggplot(cellprops_long_l4, aes(x = CellType, y = Proportion, fill = Group)) +
+  geom_boxplot(position = position_dodge(0.8), outlier.alpha = 0.2) +
+  scale_fill_manual(values = c("Normal" = "#366658", "Tumor" = "#B22222")) +
+  theme_tufte(base_size = 14) +
+  labs(title = "Cell Type Proportions: Tumor vs Normal",
+       x = "Cell Type",
+       y = "Proportion (%)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  stat_compare_means(aes(group = Group), 
+                     method = "t.test", 
+                     label = "p.signif", 
+                     label.y = 60, 
+                     hide.ns = TRUE)
+dev.off()
+```
+
+```{r}
+# Visuals with age as a continuous variable
+## Merge HiTIMED with age covariate subset
+HiTIMED_age_l4 <- merge(HiTIMED_results_cancer_l4_clean, covariates_age, by = "ID")
+
+# Get just cell type columns (exclude metadata)
+cell_types <- setdiff(colnames(HiTIMED_age_l4), c("ID", "age", "age_group","Group"))
+
+# Pivot to long format
+long_df_l4 <- HiTIMED_age_l4 %>%
+   pivot_longer(cols = all_of(cell_types),
+               names_to = "CellType",
+               values_to = "Proportion")
+
+# Get average proportions per CellType
+ordered_celltypes <- long_df_l4 %>%
+  group_by(CellType) %>%
+  summarize(mean_prop = mean(Proportion, na.rm = TRUE)) %>%
+  arrange(mean_prop) %>%
+  pull(CellType)
+
+# Set CellType factor levels in decreasing order (biggest at bottom)
+long_df_l4$CellType <- factor(long_df_l4$CellType, levels = ordered_celltypes)
+
+# Order samples by age for x-axis
+age_order <- long_df_l4 %>%
+  select(ID, age) %>%
+  distinct() %>%
+  arrange(age) %>%
+  pull(ID)
+
+long_df_l4$ID <- factor(long_df_l4$ID, levels = age_order)
+
+# Order SampleIDs by Age for plotting
+long_df_l4$ID <- factor(long_df_l4$ID, 
+                        levels = HiTIMED_age_l4 %>% arrange(age) %>% pull(ID))
+# Plot stacked bar plots 
+dir.create("./stacked_bars")
+
+my_colors <- viridis(9, option = "D")
+names(my_colors) <- levels(long_df_l4$CellType)
+
+png('stacked_bars/stacked_cellprop.png',width = 7, height = 7, units = 'in', res = 600)
+ggplot(long_df_l4, aes(x = ID, y = Proportion, fill = CellType)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = my_colors) + 
+  theme_tufte() +
+  theme(axis.text.x = element_blank(),  # hide x-axis labels if too many samples
+        axis.ticks.x = element_blank()) +
+  labs(x = "Samples (ordered by Age)",
+       y = "Cell Type Proportion",
+       fill = "Cell Type",
+       title = "Cell Type Proportions across Age") +
+  scale_y_continuous(expand = c(0, 0))
+dev.off()
+
+#Linear models
+dir.create("./linear_model")
+
+png('linear_model/celltype_l4.png',width = 10, height = 10, units = 'in', res = 600)
+ggplot(long_df_l4, aes(x = age, y = Proportion, color = CellType)) +
+  geom_point(alpha = 0.6, size = 2) +
+  geom_smooth(method = "lm", se = FALSE, linetype = "solid") +
+  facet_wrap(~ CellType, scales = "free_y") +
+  theme_minimal(base_size = 14) +
+  labs(
+    title = "Tumor Cell Type Proportions vs. Age",
+    x = "Age (years)",
+    y = "Proportion (%)"
+  )
+dev.off()
+
+```
+
+```{r}
+# ==============================================================================
+# Age tertiles
+# ==============================================================================
+#Make the age tertiles
+HiTIMED_equal_age_l4 <- HiTIMED_equal_age_l4 %>%
+  mutate(equal_age_3 = factor(ntile(age, 3), 
+                                 labels = c("G1", "G2", "G3"))) # n = 19 in each
+
+# Get just cell type columns (exclude metadata)
+cell_types <- HiTIMED_equal_age_l4 %>%
+  select(where(is.numeric)) %>%
+  select(-age) %>%
+  colnames()
+
+# Pivot to long format
+long_equal_df_l4 <- HiTIMED_equal_age_l4 %>%
+   pivot_longer(cols = all_of(cell_types),
+               names_to = "CellType",
+               values_to = "Proportion")
+# Box Plot
+png('box_plots/equal_celltype_l4.png',width = 10, height = 10, units = 'in', res = 600)
+ggplot(long_equal_df_l4, aes(x = equal_age_3, y = Proportion, color = CellType)) +
+  geom_boxplot(position = position_dodge(0.8), outlier.alpha = 0.2) +
+  theme_minimal(base_size = 14) +
+  facet_wrap(~ CellType, scales = "free_y") +
+  labs(title = "Average Cell Type Proportions across Age Groups: Tumor",
+       x = "Age (years)",
+       y = "Proportion (%)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+dev.off()
+
+# Jitter plots
+dir.create("./jitter_plots")
+png('jitter_plots/equal_prop_l4.png',width = 10, height = 10, units = 'in', res = 600)
+ggplot(long_equal_df_l4, aes(x = equal_age_3, y = Proportion, color = CellType)) +
+  geom_jitter(width = 0.2, size = 2, alpha = 0.7) +
+  facet_wrap(~ CellType, scales = "free_y") +
+  theme_minimal() +
+  labs(
+    title = "Cell Type Proportions in Tumor Samples by Age Group",
+    x = "Age Group",
+    y = "Proportion (%)",
+    color = "Cell Type"
+  )
+dev.off()
+
+# Overlay Jitter plot onto Box plot
+# Get mean proportions per CellType to sort facets
+mean_props <- long_equal_df_l4 %>%
+  group_by(CellType) %>%
+  summarise(mean_prop = mean(Proportion, na.rm = TRUE)) %>%
+  arrange(mean_prop)
+
+# Reorder CellType factor levels by mean proportion
+long_equal_df_l4 <- long_equal_df_l4 %>%
+  mutate(CellType = factor(CellType, levels = mean_props$CellType))
+
+# Overlay of Box and jitter plots
+dir.create("./overlay_plot")
+png('overlay_plot/equal_prop_l4.png',width = 11, height = 11, units = 'in', res = 600)
+ggplot(long_equal_df_l4, aes(x = equal_age_3, y = Proportion, color = CellType, fill = CellType)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.4, position = position_dodge(0.75)) +
+  geom_jitter(position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.75),
+              size = 1.2, alpha = 0.6) +
+  scale_fill_manual(values = my_colors) +
+  scale_color_manual(values = my_colors) +
+  theme_tufte(base_size = 18) +
+  theme(
+  axis.text.x = element_text(size = 14, angle = 45, hjust = 1),
+  axis.text.y = element_text(size = 14),
+  axis.title.x = element_text(size = 16),
+  axis.title.y = element_text(size = 16),
+  strip.text = element_text(size = 16),         # Facet label
+  plot.title = element_text(size = 24),
+  legend.text = element_text(size = 14),
+  legend.title = element_text(size = 16)
+) +
+  stat_compare_means(aes(group = equal_age_3),method = "anova", label = "p.format")+  
+  facet_wrap(~ CellType, scales = "free_y") +
+  labs(title = "Cell Type Proportions across Age Groups",
+       x = "Age Group", y = "Proportion (%)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "none")
+dev.off()
+
+#Anova 
+anova_by_celltype <- long_equal_df_l4 %>%
+  group_by(CellType) %>%
+  do(tidy(aov(Proportion ~ equal_age_3, data = .)))
+
+print(anova_by_celltype)
+
+tukey_results <- long_equal_df_l4 %>%
+  group_by(CellType) %>%
+  do(tidy(TukeyHSD(aov(Proportion ~ equal_age_3, data = .))))
+
+```
+
