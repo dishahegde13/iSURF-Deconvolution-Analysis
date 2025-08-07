@@ -35,7 +35,7 @@ iSURF NH-INBRE 2025, University of New Hampshire, Dartmouth Cancer Center, Geise
   * Downloaded raw DNA methylation data (IDAT files) and covariate data (sample ID, age, tissue type, etc) using [`GEOquery`](https://bioconductor.org/packages/release/bioc/html/GEOquery.html).
   * Downloaded required [annotation and mask files](https://zwdzwd.github.io/InfiniumAnnotation#human).
     * Annotation File: [Infinium MethylationEPIC Manifest with mapping information hg38](https://github.com/zhou-lab/InfiniumAnnotationV1/raw/main/Anno/EPIC/archive/202209/EPIC.hg38.manifest.tsv.gz)
-    * Mask file: [Infinium MethylationEPIC Mask File](https://github.com/zhou-lab/InfiniumAnnotationV1/raw/main/Anno/EPIC/archive/202209/EPIC.hg38.mask.tsv.gz)
+    * Mask file: [Infinium MethylationEPIC Mask File hg38](https://github.com/zhou-lab/InfiniumAnnotationV1/raw/main/Anno/EPIC/archive/202209/EPIC.hg38.mask.tsv.gz)
 
 ### Preprocessing 
 #### 1. Quality Control (QC) 
